@@ -1,5 +1,6 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn } from "typeorm";
-import { Order } from "src/modules/orders/entities/order.entity";
+import { Order } from "../../orders/entities/order.entity";
+
 @Entity('payments')
 export class Payment {
   @PrimaryGeneratedColumn('uuid')

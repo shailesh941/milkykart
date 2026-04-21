@@ -1,6 +1,6 @@
-import { Product } from "src/modules/products/entities/product.entity";
-import { User } from "src/modules/users/entities/user.entity";
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn, Unique } from "typeorm";
+import { Product } from "../../products/entities/product.entity";
+import { User } from "../../users/entities/user.entity";
 
 @Entity('reviews')
 // @Unique(['userId', 'productId'])

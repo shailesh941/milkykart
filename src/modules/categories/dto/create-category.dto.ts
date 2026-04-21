@@ -10,4 +10,9 @@ export class CreateCategoryDto {
   @IsOptional()
   @IsString()
   slug?: string;
+
+  @ApiPropertyOptional({ example: 'electronics', description: 'URL slug' })
+  @IsOptional()
+  @IsString()
+  discription?: string;
 }

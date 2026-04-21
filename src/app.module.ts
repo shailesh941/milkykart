@@ -22,7 +22,7 @@ import { join } from 'path';
         port: 3306, // Must match the port used in MySQL Workbench
         username: 'root', // Your MySQL username
         password: 'root', // Your MySQL password
-        database: 'milkykart', // The name of the database you created in Workbench
+        database: 'milk_shop', // The name of the database you created in Workbench
         entities: [__dirname + '/**/*.entity{.ts,.js}'], // Path to your entity files
         synchronize: true, // Use false in production
       }

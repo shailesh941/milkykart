@@ -4,7 +4,10 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.enableCors();
+  app.enableCors({
+  origin: true,
+  credentials: true
+});
   app.setGlobalPrefix('api');
   app.getHttpAdapter().getInstance().disable('etag');
   // ✅ Swagger Config
@@ -25,6 +28,6 @@ async function bootstrap() {
 
   SwaggerModule.setup('api', app, document); // 👉 http://localhost:3000/api
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3002);
 }
 bootstrap();

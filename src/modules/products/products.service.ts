@@ -17,16 +17,11 @@ export class ProductsService {
 
   // ➕ CREATE
   async create(dto: CreateProductDto): Promise<Product> {
-    const product = this.productRepo.create({
-      name: dto.name,
-      description: dto.description,
-      price: dto.price,
-      stock: dto.stock,
-      image: dto.image,
-    });
+    const setData:any = dto;
+    const product:any = this.productRepo.create(setData);
 
-    if (dto.category) {
-      const category = await this.categoryRepo.findOneBy({ id: dto.category });
+    if (setData.category) {
+      const category = await this.categoryRepo.findOneBy({ id: setData.category });
       if (!category) throw new NotFoundException('Category not found');
       product.category = category;
     }
@@ -55,7 +50,7 @@ export class ProductsService {
 
   // ✏️ UPDATE
   async update(id: string, dto: UpdateProductDto): Promise<Product> {
-    const product = await this.findOne(id);
+    const product:any = await this.findOne(id);
 
     if (dto.category !== undefined) {
       if (dto.category === null) {

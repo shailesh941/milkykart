@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateCartDto } from './dto/create-cart.dto';
@@ -118,6 +118,54 @@ export class CartService {
     }
 
     return this.findOne(id);
+  }
+  async updateCartItem(
+    itemId: any,
+    userId: any,
+    dto: any
+  ) {
+    const item = await this.cartItemRepository.findOne({
+      where: { id: itemId },
+      relations: ['cart'],
+    });
+
+    if (!item) {
+      throw new NotFoundException('Item not found');
+    }
+
+    // // 🔐 Check ownership
+    // if (item.cart.userId !== userId) {
+    //   throw new ForbiddenException('Not allowed');
+    // }
+
+    // update quantity
+    item.quantity = dto.quantity ?? item.quantity;
+
+    return this.cartItemRepository.save(item);
+  }
+
+  async deleteCartItem(itemId: string, userId: string) {
+
+    const item = await this.cartItemRepository.findOne({
+      where: { id: itemId },
+      relations: ['cart'], // 🔥 needed to access cart.userId
+    });
+
+    if (!item) {
+      throw new NotFoundException('Cart item not found');
+    }
+
+    // // 🔐 ownership check
+    // if (item.cart.userId !== userId) {
+    //   throw new ForbiddenException('You are not allowed to delete this item');
+    // }
+
+    await this.cartItemRepository.remove(item);
+
+    return {
+      message: 'Cart item deleted successfully',
+      id: itemId,
+    };
   }
 
   async remove(id: string): Promise<void> {

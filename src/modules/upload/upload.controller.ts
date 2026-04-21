@@ -3,7 +3,6 @@ import { UploadService } from './upload.service';
 import { CreateUploadDto } from './dto/create-upload.dto';
 import { UpdateUploadDto } from './dto/update-upload.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { S3Service } from 'src/core/services/s3-upload.service';
 import { ApiBody, ApiConsumes } from '@nestjs/swagger';
 
 @Controller('upload')

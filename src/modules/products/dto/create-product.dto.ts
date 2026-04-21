@@ -1,29 +1,84 @@
-import { IsOptional, IsString, IsNumber } from 'class-validator';
+import { 
+  IsOptional, IsString, IsNumber, IsArray, IsBoolean, 
+  IsEnum, Min, ValidateNested, IsUrl 
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+
+// Helper classes for nested validation
+class DimensionsDto {
+  @IsNumber() @Min(0) width: number;
+  @IsNumber() @Min(0) height: number;
+  @IsNumber() @Min(0) depth: number;
+}
+
+class MetaDto {
+  @IsOptional() @IsString() barcode?: string;
+  @IsOptional() @IsString() qrCode?: string;
+}
 
 export class CreateProductDto {
-  @ApiProperty({ example: 'Phone', description: 'Product name' })
+  @ApiProperty({ example: 'Essence Mascara Lash Princess' })
   @IsString()
-  name: string;
+  title: string;
 
-  @ApiProperty({ example: 'Smartphone with 128GB storage', description: 'Product description' })
+  @ApiProperty({ example: 'A high-quality mascara for long lashes.' })
   @IsString()
   description: string;
 
-  @ApiProperty({ example: 799, description: 'Product price' })
+  @ApiProperty({ example: 9.99 })
   @IsNumber()
+  @Min(0)
   price: number;
 
-  @ApiProperty({ example: 50, description: 'Stock quantity' })
+  @ApiPropertyOptional({ example: 10.5 })
+  @IsOptional()
   @IsNumber()
+  discountPercentage?: number;
+
+  @ApiProperty({ example: 150 })
+  @IsNumber()
+  @Min(0)
   stock: number;
 
-  @ApiPropertyOptional({ example: 'uuid-category', description: 'Category ID' })
-  @IsOptional()
-  category?: string;
+  @ApiProperty({ example: 'RCH88S6W' })
+  @IsString()
+  sku: string;
 
-  @ApiPropertyOptional({ example: 'https://...', description: 'Image URL' })
+  @ApiPropertyOptional({ example: 'Essence' })
   @IsOptional()
   @IsString()
-  image?: string;
+  brand?: string;
+
+  @ApiProperty({ example: 'beauty' })
+  @IsString()
+  category: string; // This can be the Category ID or Name depending on your logic
+
+  @ApiPropertyOptional({ type: DimensionsDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DimensionsDto)
+  dimensions?: DimensionsDto;
+
+  @ApiPropertyOptional({ example: ['url1', 'url2'] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
+
+  @ApiPropertyOptional({ example: 'thumbnail-url' })
+  @IsOptional()
+  @IsString()
+  thumbnail?: string;
+
+  @ApiPropertyOptional({ type: MetaDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => MetaDto)
+  meta?: MetaDto;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @IsNumber()
+  minimumOrderQuantity?: number;
 }

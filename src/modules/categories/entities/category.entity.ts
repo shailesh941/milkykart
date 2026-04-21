@@ -1,5 +1,5 @@
-import { Product } from "src/modules/products/entities/product.entity";
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Product } from "../../products/entities/product.entity";
 
 @Entity('categories')
 export class Category {
@@ -8,6 +8,9 @@ export class Category {
 
   @Column()
   name: string;
+
+  @Column()
+  discription?: string;
 
   @Column({ unique: true, nullable: true })
   slug?: string;
