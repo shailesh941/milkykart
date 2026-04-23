@@ -24,7 +24,7 @@ export class ProductsController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+  //@UseGuards(JwtAuthGuard)
   findAll(@Req() req: Request) {
     console.log(req.headers.authorization);
     return this.productsService.findAll();

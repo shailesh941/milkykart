@@ -20,8 +20,8 @@ import { join } from 'path';
         type: 'mysql',
         host: 'localhost', // Must match the hostname used in MySQL Workbench
         port: 3306, // Must match the port used in MySQL Workbench
-        username: 'milky_user', // Your MySQL username
-        password: 'Shail9335@', // Your MySQL password
+        username: 'root', // Your MySQL username
+        password: 'root', // Your MySQL password
         database: 'milk_shop', // The name of the database you created in Workbench
         entities: [__dirname + '/**/*.entity{.ts,.js}'], // Path to your entity files
         synchronize: true, // Use false in production
