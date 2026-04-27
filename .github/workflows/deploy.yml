@@ -1,8 +1,9 @@
-name: Deploy Next.js to GCP VM
+name: Deploy NestJS to GCP VM
 
 on:
   push:
     branches: [main, master]
+  workflow_dispatch:
 
 env:
   APP_DIR: /var/www/app/backend
@@ -18,26 +19,27 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
         run: npm install
 
-      - name: Build Next.js
+      - name: Build NestJS
         run: npm run build
 
-      - name: Show BUILD_ID
-        run: cat .next/BUILD_ID
+      # ✅ Verify dist exists (NestJS)
+      - name: Verify build output
+        run: |
+          echo "📦 Checking dist folder..."
+          ls -la dist || exit 1
 
       - name: Package build
         run: |
           mkdir -p deploy
-          cp -r .next deploy/
-          cp -r public deploy/
+          cp -r dist deploy/
           cp package*.json deploy/
           cp ecosystem.config.js deploy/
-          cp next.config.* deploy/ 2>/dev/null || true
           tar -czf deploy.tar.gz -C deploy .
 
       - name: Upload artifact
@@ -56,7 +58,7 @@ jobs:
         with:
           name: build
 
-      # 🔐 Authenticate with GCP (OIDC - no SSH key)
+      # 🔐 GCP Auth (OIDC)
       - name: Auth GCP
         uses: google-github-actions/auth@v2
         with:
@@ -80,13 +82,11 @@ jobs:
               mkdir -p backups
               ts=\$(date +%Y%m%d_%H%M%S)
 
-              tar -czf backups/backup_\$ts.tar.gz .next 2>/dev/null || true
-
-              # Keep last 5 backups
+              tar -czf backups/backup_\$ts.tar.gz dist 2>/dev/null || true
               ls -t backups/*.tar.gz 2>/dev/null | tail -n +6 | xargs -r rm
 
               echo '🔹 Cleaning old build...'
-              rm -rf .next
+              rm -rf dist
               rm -f deploy.tar.gz
 
               npm cache clean --force || true
@@ -112,46 +112,36 @@ jobs:
               echo '📦 Checking uploaded file...'
               ls -lh deploy.tar.gz || exit 1
 
-              echo '📦 Validating archive...'
-              tar -tzf deploy.tar.gz | head || exit 1
-
-              echo '🔥 Removing old build...'
-              rm -rf .next
-
-              echo '📦 Extracting new build...'
+              echo '📦 Extracting build...'
               tar -xzf deploy.tar.gz
               rm deploy.tar.gz
 
-              echo '🔍 Verifying build...'
-              ls -la .next || exit 1
-              cat .next/BUILD_ID || exit 1
-
-              echo '📦 Installing dependencies...'
-              npm install
+              echo '📦 Installing production deps...'
+              npm install --production
 
               echo '🔁 Restarting PM2...'
-              pm2 reload next-app || pm2 start ecosystem.config.js --name next-app
+              pm2 reload nest-app || pm2 start ecosystem.config.js --name nest-app
               pm2 save
 
               echo '🔁 Restarting Nginx...'
               sudo systemctl restart nginx || true
 
-              echo '✅ Deployment completed successfully'
+              echo '✅ Deployment completed'
             "
 
-      # 🔍 VERIFY
+      # 🔍 VERIFY API
       - name: Verify deployment
         run: |
-          echo "⏳ Waiting for app..."
+          echo "⏳ Waiting for API..."
           sleep 10
 
           for i in {1..3}; do
-            status=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.APP_URL }} || echo "000")
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.APP_URL }}/api || echo "000")
 
             echo "Attempt $i → Status: $status"
 
             if [[ "$status" == "200" || "$status" == "301" || "$status" == "302" ]]; then
-              echo "✅ App is live!"
+              echo "✅ API is live!"
               exit 0
             fi
 
