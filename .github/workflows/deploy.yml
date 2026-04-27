@@ -1,9 +1,8 @@
-name: Deploy NestJS to EC2
+name: Deploy Next.js to GCP VM
 
 on:
   push:
     branches: [master]
-  workflow_dispatch:
 
 env:
   APP_DIR: /var/www/app/backend
@@ -19,23 +18,26 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24.15.0
-          cache: "npm"
+          node-version: 20
+          cache: npm
 
-      - name: Install deps
+      - name: Install dependencies
         run: npm install
 
-      - name: Build NestJS
-        run: npm run build   # creates dist/
+      - name: Build Next.js
+        run: npm run build
+
+      - name: Show BUILD_ID
+        run: cat .next/BUILD_ID
 
       - name: Package build
         run: |
           mkdir -p deploy
-
-          cp -r dist deploy/
+          cp -r .next deploy/
+          cp -r public deploy/
           cp package*.json deploy/
           cp ecosystem.config.js deploy/
-
+          cp next.config.* deploy/ 2>/dev/null || true
           tar -czf deploy.tar.gz -C deploy .
 
       - name: Upload artifact
@@ -43,7 +45,6 @@ jobs:
         with:
           name: build
           path: deploy.tar.gz
-          retention-days: 1
 
   deploy:
     needs: build
@@ -55,90 +56,102 @@ jobs:
         with:
           name: build
 
+      # 🔐 Authenticate with GCP (OIDC - no SSH key)
+      - name: Auth GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
       # 🔥 PRE-CLEAN + BACKUP
-      - name: Pre-clean EC2
-        env:
-          HOST: ${{ secrets.EC2_HOST }}
-          USER: ${{ secrets.EC2_USERNAME }}
-          KEY: ${{ secrets.EC2_SSH_KEY }}
+      - name: Pre-clean VM
         run: |
-          echo "$KEY" > key.pem
-          chmod 600 key.pem
+          gcloud compute ssh ${{ secrets.GCP_INSTANCE }} \
+            --zone=${{ secrets.GCP_ZONE }} \
+            --command="
+              cd $APP_DIR || exit
 
-          ssh -i key.pem -o StrictHostKeyChecking=no $USER@$HOST << EOF
-            cd $APP_DIR || exit
+              echo '🔹 Creating backup...'
+              mkdir -p backups
+              ts=\$(date +%Y%m%d_%H%M%S)
 
-            mkdir -p backups
-            ts=$(date +%Y%m%d_%H%M%S)
+              tar -czf backups/backup_\$ts.tar.gz .next 2>/dev/null || true
 
-            tar -czf backups/backup_$ts.tar.gz dist 2>/dev/null || true
-            ls -t backups/*.tar.gz 2>/dev/null | tail -n +6 | xargs -r rm
+              # Keep last 5 backups
+              ls -t backups/*.tar.gz 2>/dev/null | tail -n +6 | xargs -r rm
 
-            rm -rf dist
-            rm -f deploy.tar.gz
+              echo '🔹 Cleaning old build...'
+              rm -rf .next
+              rm -f deploy.tar.gz
 
-            npm cache clean --force || true
-          EOF
+              npm cache clean --force || true
+            "
 
-          rm key.pem
+      # 📤 Upload build
+      - name: Upload build
+        run: |
+          gcloud compute scp deploy.tar.gz \
+            ${{ secrets.GCP_INSTANCE }}:$APP_DIR/ \
+            --zone=${{ secrets.GCP_ZONE }} \
+            --quiet
 
       # 🚀 DEPLOY
-      - name: Deploy to EC2
-        env:
-          HOST: ${{ secrets.EC2_HOST }}
-          USER: ${{ secrets.EC2_USERNAME }}
-          KEY: ${{ secrets.EC2_SSH_KEY }}
+      - name: Deploy
         run: |
-          echo "$KEY" > key.pem
-          chmod 600 key.pem
+          gcloud compute ssh ${{ secrets.GCP_INSTANCE }} \
+            --zone=${{ secrets.GCP_ZONE }} \
+            --command="
+              set -e
+              cd $APP_DIR || exit
 
-          scp -i key.pem -o StrictHostKeyChecking=no \
-            deploy.tar.gz $USER@$HOST:$APP_DIR/
+              echo '📦 Checking uploaded file...'
+              ls -lh deploy.tar.gz || exit 1
 
-          ssh -i key.pem -o StrictHostKeyChecking=no $USER@$HOST << EOF
-            cd $APP_DIR || exit
+              echo '📦 Validating archive...'
+              tar -tzf deploy.tar.gz | head || exit 1
 
-            ls -lh deploy.tar.gz || exit 1
-            tar -tzf deploy.tar.gz | head || exit 1
+              echo '🔥 Removing old build...'
+              rm -rf .next
 
-            rm -rf dist
+              echo '📦 Extracting new build...'
+              tar -xzf deploy.tar.gz
+              rm deploy.tar.gz
 
-            tar -xzf deploy.tar.gz || exit 1
-            rm deploy.tar.gz
+              echo '🔍 Verifying build...'
+              ls -la .next || exit 1
+              cat .next/BUILD_ID || exit 1
 
-            ls -la dist || exit 1
+              echo '📦 Installing dependencies...'
+              npm install
 
-            npm install --production || exit 1
+              echo '🔁 Restarting PM2...'
+              pm2 reload next-app || pm2 start ecosystem.config.js --name next-app
+              pm2 save
 
-            sudo chown -R $USER:$USER $APP_DIR
+              echo '🔁 Restarting Nginx...'
+              sudo systemctl restart nginx || true
 
-            echo "🔁 Restarting PM2..."
-            pm2 delete nest-app || true
-            pm2 start ecosystem.config.js --name nest-app
-            pm2 save
-
-            echo "🔁 Restarting Nginx..."
-            sudo systemctl restart nginx || true
-
-            echo "✅ Deployment completed"
-          EOF
-
-          rm key.pem
+              echo '✅ Deployment completed successfully'
+            "
 
       # 🔍 VERIFY
       - name: Verify deployment
-        env:
-          HOST: ${{ secrets.EC2_HOST }}
         run: |
+          echo "⏳ Waiting for app..."
           sleep 10
 
           for i in {1..3}; do
-            status=$(curl -s -o /dev/null -w "%{http_code}" http://$HOST/api || echo "000")
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.APP_URL }} || echo "000")
 
             echo "Attempt $i → Status: $status"
 
-            if [ "$status" = "200" ] || [ "$status" = "301" ] || [ "$status" = "302" ]; then
-              echo "✅ API is live!"
+            if [[ "$status" == "200" || "$status" == "301" || "$status" == "302" ]]; then
+              echo "✅ App is live!"
               exit 0
             fi
 
